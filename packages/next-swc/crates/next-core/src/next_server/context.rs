@@ -13,21 +13,24 @@ use turbo_binding::{
         ecmascript::EcmascriptInputTransform,
         node::execution_context::ExecutionContextVc,
         turbopack::{
+            condition::ContextCondition,
             module_options::{
                 ModuleOptionsContext, ModuleOptionsContextVc, PostCssTransformOptions,
-                WebpackLoadersOptions,
+                TypescriptTransformOptions, WebpackLoadersOptions,
             },
             resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
         },
     },
 };
 use turbo_tasks::{primitives::StringVc, Value};
+use turbo_tasks_fs::FileSystem;
 
 use super::{
     resolve::ExternalCjsModulesResolvePluginVc, transforms::get_next_server_transforms_rules,
 };
 use crate::{
     babel::maybe_add_babel_loader,
+    embed_js::next_js_fs,
     next_build::{get_external_next_compiled_package_mapping, get_postcss_package_mapping},
     next_config::NextConfigVc,
     next_import_map::get_next_server_import_map,
@@ -245,6 +248,12 @@ pub async fn get_server_module_options_context(
                 execution_context: Some(execution_context),
                 ..Default::default()
             };
+
+            let internal_module_options_context = ModuleOptionsContext {
+                enable_typescript_transform: Some(TypescriptTransformOptions::default().cell()),
+                ..module_options_context.clone()
+            };
+
             ModuleOptionsContext {
                 enable_jsx: Some(jsx_runtime_options),
                 enable_styled_jsx: true,
@@ -255,10 +264,16 @@ pub async fn get_server_module_options_context(
                 enable_typescript_transform: Some(tsconfig),
                 enable_mdx_rs: mdx_rs_options,
                 decorators: Some(decorators_options),
-                rules: vec![(
-                    foreign_code_context_condition,
-                    module_options_context.clone().cell(),
-                )],
+                rules: vec![
+                    (
+                        foreign_code_context_condition,
+                        module_options_context.clone().cell(),
+                    ),
+                    (
+                        ContextCondition::InPath(next_js_fs().root()),
+                        internal_module_options_context.cell(),
+                    ),
+                ],
                 custom_rules,
                 ..module_options_context
             }
@@ -273,6 +288,11 @@ pub async fn get_server_module_options_context(
                 execution_context: Some(execution_context),
                 ..Default::default()
             };
+            let internal_module_options_context = ModuleOptionsContext {
+                enable_typescript_transform: Some(TypescriptTransformOptions::default().cell()),
+                ..module_options_context.clone()
+            };
+
             ModuleOptionsContext {
                 enable_jsx: Some(jsx_runtime_options),
                 enable_styled_jsx: true,
@@ -283,10 +303,16 @@ pub async fn get_server_module_options_context(
                 enable_typescript_transform: Some(tsconfig),
                 enable_mdx_rs: mdx_rs_options,
                 decorators: Some(decorators_options),
-                rules: vec![(
-                    foreign_code_context_condition,
-                    module_options_context.clone().cell(),
-                )],
+                rules: vec![
+                    (
+                        foreign_code_context_condition,
+                        module_options_context.clone().cell(),
+                    ),
+                    (
+                        ContextCondition::InPath(next_js_fs().root()),
+                        internal_module_options_context.cell(),
+                    ),
+                ],
                 custom_rules,
                 ..module_options_context
             }
@@ -307,6 +333,10 @@ pub async fn get_server_module_options_context(
                 execution_context: Some(execution_context),
                 ..Default::default()
             };
+            let internal_module_options_context = ModuleOptionsContext {
+                enable_typescript_transform: Some(TypescriptTransformOptions::default().cell()),
+                ..module_options_context.clone()
+            };
             ModuleOptionsContext {
                 enable_jsx: Some(jsx_runtime_options),
                 enable_emotion,
@@ -316,10 +346,16 @@ pub async fn get_server_module_options_context(
                 enable_typescript_transform: Some(tsconfig),
                 enable_mdx_rs: mdx_rs_options,
                 decorators: Some(decorators_options),
-                rules: vec![(
-                    foreign_code_context_condition,
-                    module_options_context.clone().cell(),
-                )],
+                rules: vec![
+                    (
+                        foreign_code_context_condition,
+                        module_options_context.clone().cell(),
+                    ),
+                    (
+                        ContextCondition::InPath(next_js_fs().root()),
+                        internal_module_options_context.cell(),
+                    ),
+                ],
                 custom_rules,
                 ..module_options_context
             }
@@ -329,16 +365,26 @@ pub async fn get_server_module_options_context(
                 execution_context: Some(execution_context),
                 ..Default::default()
             };
+            let internal_module_options_context = ModuleOptionsContext {
+                enable_typescript_transform: Some(TypescriptTransformOptions::default().cell()),
+                ..module_options_context.clone()
+            };
             ModuleOptionsContext {
                 enable_postcss_transform,
                 enable_webpack_loaders,
                 enable_typescript_transform: Some(tsconfig),
                 enable_mdx_rs: mdx_rs_options,
                 decorators: Some(decorators_options),
-                rules: vec![(
-                    foreign_code_context_condition,
-                    module_options_context.clone().cell(),
-                )],
+                rules: vec![
+                    (
+                        foreign_code_context_condition,
+                        module_options_context.clone().cell(),
+                    ),
+                    (
+                        ContextCondition::InPath(next_js_fs().root()),
+                        internal_module_options_context.cell(),
+                    ),
+                ],
                 custom_rules,
                 ..module_options_context
             }
@@ -347,6 +393,10 @@ pub async fn get_server_module_options_context(
             let module_options_context = ModuleOptionsContext {
                 execution_context: Some(execution_context),
                 ..Default::default()
+            };
+            let internal_module_options_context = ModuleOptionsContext {
+                enable_typescript_transform: Some(TypescriptTransformOptions::default().cell()),
+                ..module_options_context.clone()
             };
             ModuleOptionsContext {
                 enable_jsx: Some(jsx_runtime_options),
@@ -358,10 +408,16 @@ pub async fn get_server_module_options_context(
                 enable_typescript_transform: Some(tsconfig),
                 enable_mdx_rs: mdx_rs_options,
                 decorators: Some(decorators_options),
-                rules: vec![(
-                    foreign_code_context_condition,
-                    module_options_context.clone().cell(),
-                )],
+                rules: vec![
+                    (
+                        foreign_code_context_condition,
+                        module_options_context.clone().cell(),
+                    ),
+                    (
+                        ContextCondition::InPath(next_js_fs().root()),
+                        internal_module_options_context.cell(),
+                    ),
+                ],
                 custom_rules,
                 ..module_options_context
             }
