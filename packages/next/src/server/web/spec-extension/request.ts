@@ -1,9 +1,12 @@
 import type { I18NConfig } from '../../config-shared'
 import type { RequestData } from '../types'
+import type { NodeNextRequest } from '../../base-http/node'
+
 import { NextURL } from '../next-url'
 import { toNodeHeaders, validateURL } from '../utils'
 import { RemovedUAError, RemovedPageError } from '../error'
 import { RequestCookies } from './cookies'
+import { WebNextRequest } from '../../base-http/web'
 
 export const INTERNALS = Symbol('internal request')
 
@@ -14,9 +17,14 @@ export class NextRequest extends Request {
     ip?: string
     url: string
     nextUrl: NextURL
+    request: NodeNextRequest | WebNextRequest | undefined
   }
 
-  constructor(input: URL | RequestInfo, init: RequestInit = {}) {
+  constructor(
+    input: URL | RequestInfo,
+    init: RequestInit = {},
+    request?: NodeNextRequest | WebNextRequest
+  ) {
     const url =
       typeof input !== 'string' && 'url' in input ? input.url : String(input)
     validateURL(url)
@@ -33,6 +41,7 @@ export class NextRequest extends Request {
       url: process.env.__NEXT_NO_MIDDLEWARE_URL_NORMALIZE
         ? url
         : nextUrl.toString(),
+      request,
     }
   }
 
@@ -74,6 +83,14 @@ export class NextRequest extends Request {
 
   public get nextUrl() {
     return this[INTERNALS].nextUrl
+  }
+
+  /**
+   * @internal - used internally by Next.js
+   * @deprecated - use only internally in Next.js for pages support
+   */
+  public get request(): NodeNextRequest | WebNextRequest | null {
+    return this[INTERNALS].request ?? null
   }
 
   /**

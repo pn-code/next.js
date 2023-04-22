@@ -26,7 +26,7 @@ The absolute paths for _app, _error and _document, used in this loader, link to 
 They are generated in `createPagesMapping` where we don't have access to `isEdgeRuntime`,
 so we have to do it here. It's not that bad because it keeps all references to ESM modules magic in this place.
 */
-function swapDistFolderWithEsmDistFolder(path: string) {
+export function swapDistFolderWithEsmDistFolder(path: string) {
   return path.replace('next/dist/pages', 'next/dist/esm/pages')
 }
 

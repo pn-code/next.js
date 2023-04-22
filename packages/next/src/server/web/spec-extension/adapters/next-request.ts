@@ -8,8 +8,7 @@ import { NextRequest } from '../request'
 
 export class NextRequestAdapter {
   public static fromBaseNextRequest(request: BaseNextRequest): NextRequest {
-    // TODO: look at refining this check
-    if ('request' in request && (request as WebNextRequest).request) {
+    if (request.constructor.name === 'WebNextRequest') {
       return NextRequestAdapter.fromWebNextRequest(request as WebNextRequest)
     }
 
@@ -35,16 +34,20 @@ export class NextRequestAdapter {
       url = new URL(request.url, base)
     }
 
-    return new NextRequest(url, {
-      body,
-      method: request.method,
-      headers: fromNodeHeaders(request.headers),
-      // @ts-expect-error - see https://github.com/whatwg/fetch/pull/1457
-      duplex: 'half',
-      // geo
-      // ip
-      // nextConfig
-    })
+    return new NextRequest(
+      url,
+      {
+        body,
+        method: request.method,
+        headers: fromNodeHeaders(request.headers),
+        // @ts-expect-error - see https://github.com/whatwg/fetch/pull/1457
+        duplex: 'half',
+        // geo
+        // ip
+        // nextConfig
+      },
+      request
+    )
   }
 
   public static fromWebNextRequest(request: WebNextRequest): NextRequest {
@@ -54,15 +57,19 @@ export class NextRequestAdapter {
       body = request.body
     }
 
-    return new NextRequest(request.url, {
-      body,
-      method: request.method,
-      headers: fromNodeHeaders(request.headers),
-      // @ts-expect-error - see https://github.com/whatwg/fetch/pull/1457
-      duplex: 'half',
-      // geo
-      // ip
-      // nextConfig
-    })
+    return new NextRequest(
+      request.url,
+      {
+        body,
+        method: request.method,
+        headers: fromNodeHeaders(request.headers),
+        // @ts-expect-error - see https://github.com/whatwg/fetch/pull/1457
+        duplex: 'half',
+        // geo
+        // ip
+        // nextConfig
+      },
+      request
+    )
   }
 }

@@ -345,6 +345,7 @@
     "@typescript-eslint/no-redeclare": [
       "warn",
       { "builtinGlobals": false, "ignoreDeclarationMerge": true }
-    ]
+    ],
+    "prefer-const": ["warn", { "ignoreReadBeforeAssign": true }]
   }
 }

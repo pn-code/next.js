@@ -52,7 +52,7 @@ export function getRequestMeta<K extends keyof RequestMeta>(
   req: NextIncomingMessage,
   key?: K
 ): RequestMeta | RequestMeta[K] {
-  const meta = req[NEXT_REQUEST_META] || {}
+  const meta = req[NEXT_REQUEST_META] || ({ __NOT_AVAILABLE__: true } as any)
   return typeof key === 'string' ? meta[key] : meta
 }
 

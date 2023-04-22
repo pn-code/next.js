@@ -668,6 +668,7 @@ export default class HotReloader {
           config.name === COMPILER_NAMES.edgeServer
 
         await Promise.all(
+          // TODO: LOOK HERE
           Object.keys(entries).map(async (entryKey) => {
             const entryData = entries[entryKey]
             const { bundlePath, dispose } = entryData

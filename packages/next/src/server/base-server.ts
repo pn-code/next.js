@@ -36,8 +36,12 @@ import { getRedirectStatus } from '../lib/redirect-status'
 import { isEdgeRuntime } from '../lib/is-edge-runtime'
 import {
   APP_PATHS_MANIFEST,
+  FONT_MANIFEST,
   NEXT_BUILTIN_DOCUMENT,
+  NEXT_FONT_MANIFEST,
   PAGES_MANIFEST,
+  PRERENDER_MANIFEST,
+  SERVER_DIRECTORY,
   STATIC_STATUS_PAGES,
   TEMPORARY_REDIRECT_STATUS,
 } from '../shared/lib/constants'
@@ -101,6 +105,7 @@ import { RouteKind } from './future/route-kind'
 import { handleInternalServerErrorResponse } from './future/route-modules/helpers/response-handlers'
 import { fromNodeHeaders, toNodeHeaders } from './web/utils'
 import { NEXT_QUERY_PARAM_PREFIX } from '../lib/constants'
+import { ManifestLoader } from './future/route-modules/pages/helpers/load-manifests'
 
 export type FindComponentsResult = {
   components: LoadComponentsReturnType
@@ -707,7 +712,7 @@ export default abstract class Server<ServerOptions extends Options = Options> {
             this.hasAppDir
           )
 
-          let urlPathname = new URL(req.url, 'http://localhost').pathname
+          const urlPathname = new URL(req.url, 'http://localhost').pathname
 
           // For ISR  the URL is normalized to the prerenderPath so if
           // it's a data request the URL path will be the data URL,
@@ -819,7 +824,8 @@ export default abstract class Server<ServerOptions extends Options = Options> {
               pageIsDynamic &&
               !isDynamicRoute(normalizedUrlPath)
             ) {
-              let matcherParams = utils.dynamicRouteMatcher?.(normalizedUrlPath)
+              const matcherParams =
+                utils.dynamicRouteMatcher?.(normalizedUrlPath)
 
               if (matcherParams) {
                 utils.normalizeDynamicRouteParams(matcherParams)
@@ -1323,6 +1329,8 @@ export default abstract class Server<ServerOptions extends Options = Options> {
       ) &&
       (isSSG || hasServerProps)
 
+    delete query.__nextDataReq
+
     // when we are handling a middleware prefetch and it doesn't
     // resolve to a static data route we bail early to avoid
     // unexpected SSR invocations
@@ -1354,8 +1362,6 @@ export default abstract class Server<ServerOptions extends Options = Options> {
         }
       }
     }
-
-    delete query.__nextDataReq
 
     // normalize req.url for SSG paths as it is not exposed
     // to getStaticProps and the asPath should not expose /_next/data
@@ -1597,6 +1603,38 @@ export default abstract class Server<ServerOptions extends Options = Options> {
       const supportsDynamicHTML =
         (!isDataReq && opts.dev) || !(isSSG || hasStaticPaths)
 
+      const origQuery = parseUrl(req.url || '', true).query
+
+      // clear any dynamic route params so they aren't in
+      // the resolvedUrl
+      if (opts.params) {
+        Object.keys(opts.params).forEach((key) => {
+          delete origQuery[key]
+        })
+      }
+
+      const hadTrailingSlash =
+        urlPathname !== '/' && this.nextConfig.trailingSlash
+
+      const resolvedUrl = formatUrl({
+        pathname: `${resolvedUrlPathname}${hadTrailingSlash ? '/' : ''}`,
+        // make sure to only add query values from original URL
+        query: origQuery,
+      })
+
+      // For getServerSideProps and getInitialProps we need to ensure we use the
+      // original URL and not the resolved URL to prevent a hydration mismatch
+      // on asPath.
+      const resolvedAsPath =
+        hasServerProps || hasGetInitialProps
+          ? formatUrl({
+              // we use the original URL pathname less the _next/data prefix if
+              // present
+              pathname: `${urlPathname}${hadTrailingSlash ? '/' : ''}`,
+              query: origQuery,
+            })
+          : resolvedUrl
+
       const match =
         pathname !== '/_error' && !is404Page && !is500Page
           ? getRequestMeta(req, '_nextMatch')
@@ -1605,9 +1643,25 @@ export default abstract class Server<ServerOptions extends Options = Options> {
       if (match) {
         const context: RouteHandlerManagerContext = {
           params: match.params,
-          staticGenerationContext: {
-            supportsDynamicHTML,
-            incrementalCache,
+          export: false,
+          staticGenerationContext: { supportsDynamicHTML, incrementalCache },
+          manifests: ManifestLoader.load({ distDir: this.distDir }),
+          renderOpts: {
+            page: pathname,
+            ampPath: opts.ampPath,
+            customServer: opts.customServer,
+            distDir: opts.distDir,
+            err: opts.err,
+            isDataReq,
+            query,
+            resolvedAsPath,
+            resolvedUrl,
+            runtime: opts.runtime,
+            runtimeConfig: opts.runtimeConfig,
+            defaultLocale: opts.defaultLocale,
+            isLocaleDomain: getRequestMeta(req, '__nextIsLocaleDomain'),
+            locale: opts.locale,
+            locales: opts.locales,
           },
         }
 
@@ -1625,12 +1679,12 @@ export default abstract class Server<ServerOptions extends Options = Options> {
               if (!headers['content-type'] && blob.type) {
                 headers['content-type'] = blob.type
               }
-              let revalidate: number | false | undefined =
-                context.staticGenerationContext.store?.revalidate
 
-              if (typeof revalidate == 'undefined') {
-                revalidate = false
-              }
+              // Pull the revalidation time from the static generation context.
+              // It has been computed based on the API's accessed and the
+              // configuration of the route.
+              const revalidate: number | false =
+                context.staticGenerationContext.store?.revalidate ?? false
 
               // Create the cache entry for the response.
               const cacheEntry: ResponseCacheEntry = {
@@ -1664,32 +1718,11 @@ export default abstract class Server<ServerOptions extends Options = Options> {
 
             return null
           }
+
+          // This is not an app route, so throw the error so it can bubble.
+          throw err
         }
       }
-
-      let pageData: any
-      let body: RenderResult
-      let isrRevalidate: number | false
-      let isNotFound: boolean | undefined
-      let isRedirect: boolean | undefined
-
-      const origQuery = parseUrl(req.url || '', true).query
-
-      // clear any dynamic route params so they aren't in
-      // the resolvedUrl
-      if (opts.params) {
-        Object.keys(opts.params).forEach((key) => {
-          delete origQuery[key]
-        })
-      }
-      const hadTrailingSlash =
-        urlPathname !== '/' && this.nextConfig.trailingSlash
-
-      const resolvedUrl = formatUrl({
-        pathname: `${resolvedUrlPathname}${hadTrailingSlash ? '/' : ''}`,
-        // make sure to only add query values from original URL
-        query: origQuery,
-      })
 
       const renderOpts: RenderOpts = {
         ...components,
@@ -1705,24 +1738,12 @@ export default abstract class Server<ServerOptions extends Options = Options> {
         locale,
         locales,
         defaultLocale,
-        // For getServerSideProps and getInitialProps we need to ensure we use the original URL
-        // and not the resolved URL to prevent a hydration mismatch on
-        // asPath
-        resolvedAsPath:
-          hasServerProps || hasGetInitialProps
-            ? formatUrl({
-                // we use the original URL pathname less the _next/data prefix if
-                // present
-                pathname: `${urlPathname}${hadTrailingSlash ? '/' : ''}`,
-                query: origQuery,
-              })
-            : resolvedUrl,
-
+        resolvedAsPath,
         supportsDynamicHTML,
         isOnDemandRevalidate,
       }
 
-      const renderResult = await this.renderHTML(
+      const result: RenderResult = await this.renderHTML(
         req,
         res,
         pathname,
@@ -1730,23 +1751,21 @@ export default abstract class Server<ServerOptions extends Options = Options> {
         renderOpts
       )
 
-      body = renderResult
-
-      const renderResultMeta = renderResult.metadata()
-
-      pageData = renderResultMeta.pageData
-      isrRevalidate = renderResultMeta.revalidate
-      isNotFound = renderResultMeta.isNotFound
-      isRedirect = renderResultMeta.isRedirect
+      const metadata = result.metadata()
 
       // we don't throw static to dynamic errors in dev as isSSG
       // is a best guess in dev since we don't have the prerender pass
       // to know whether the path is actually static or not
-      if (isAppPath && isSSG && isrRevalidate === 0 && !this.renderOpts.dev) {
+      if (
+        isAppPath &&
+        isSSG &&
+        metadata.revalidate === 0 &&
+        !this.renderOpts.dev
+      ) {
         const staticBailoutInfo: {
           stack?: string
           description?: string
-        } = renderResultMeta.staticBailoutInfo || {}
+        } = metadata.staticBailoutInfo || {}
 
         const err = new Error(
           `Page changed from static to dynamic at runtime ${urlPathname}${
@@ -1766,17 +1785,17 @@ export default abstract class Server<ServerOptions extends Options = Options> {
       }
 
       let value: ResponseCacheValue | null
-      if (isNotFound) {
+      if (metadata.isNotFound) {
         value = null
-      } else if (isRedirect) {
-        value = { kind: 'REDIRECT', props: pageData }
+      } else if (metadata.isRedirect) {
+        value = { kind: 'REDIRECT', props: metadata.pageData }
       } else {
-        if (body.isNull()) {
+        if (result.isNull()) {
           return null
         }
-        value = { kind: 'PAGE', html: body, pageData }
+        value = { kind: 'PAGE', html: result, pageData: metadata.pageData }
       }
-      return { revalidate: isrRevalidate, value }
+      return { revalidate: metadata.revalidate, value }
     }
 
     const cacheEntry = await this.responseCache.get(
@@ -1946,8 +1965,9 @@ export default abstract class Server<ServerOptions extends Options = Options> {
 
     const { revalidate, value: cachedData } = cacheEntry
     const revalidateOptions: any =
-      typeof revalidate !== 'undefined' &&
-      (!this.renderOpts.dev || (hasServerProps && !isDataReq))
+      // FIXME: (wyattjoh) validate this logic change
+      // JUSTIFICATION: (wyattjoh) a page with `getServerSideProps` can't return a `revalidate` value
+      typeof revalidate !== 'undefined' && !this.renderOpts.dev && !isDataReq
         ? {
             // When the page is 404 cache-control should not be added unless
             // we are rendering the 404 page for notFound: true which should
@@ -2120,7 +2140,6 @@ export default abstract class Server<ServerOptions extends Options = Options> {
     ctx: RequestContext
   ): Promise<ResponsePayload | null> {
     const { res, query, pathname } = ctx
-    let page = pathname
     const bubbleNoFallback = !!query._nextBubbleNoFallback
     delete query._nextBubbleNoFallback
 
@@ -2166,7 +2185,7 @@ export default abstract class Server<ServerOptions extends Options = Options> {
           'Invariant: failed to load static page',
           JSON.stringify(
             {
-              page,
+              page: pathname,
               url: ctx.req.url,
               matchedPath: ctx.req.headers['x-matched-path'],
               initUrl: getRequestMeta(ctx.req, '__NEXT_INIT_URL'),
@@ -2205,7 +2224,7 @@ export default abstract class Server<ServerOptions extends Options = Options> {
           (this.minimalMode && process.env.NEXT_RUNTIME !== 'edge') ||
           this.renderOpts.dev
         ) {
-          if (isError(err)) err.page = page
+          if (isError(err)) err.page = pathname
           throw err
         }
         this.logError(getProperError(err))

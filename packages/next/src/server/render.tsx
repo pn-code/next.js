@@ -292,7 +292,7 @@ function checkRedirectValues(
   method: 'getStaticProps' | 'getServerSideProps'
 ) {
   const { destination, permanent, statusCode, basePath } = redirect
-  let errors: string[] = []
+  const errors: string[] = []
 
   const hasStatusCode = typeof statusCode !== 'undefined'
   const hasPermanent = typeof permanent !== 'undefined'
@@ -444,14 +444,9 @@ export async function renderToHTML(
   let Document = renderOpts.Document
 
   // Component will be wrapped by ServerComponentWrapper for RSC
-  let Component: React.ComponentType<{}> | ((props: any) => JSX.Element) =
+  const Component: React.ComponentType<{}> | ((props: any) => JSX.Element) =
     renderOpts.Component
   const OriginComponent = Component
-
-  let serverComponentsInlinedTransformStream: TransformStream<
-    Uint8Array,
-    Uint8Array
-  > | null = null
 
   const isFallback = !!query.__nextFallback
   const notFoundSrcPage = query.__nextNotFoundSrcPage
@@ -959,7 +954,7 @@ export async function renderToHTML(
 
     // pass up revalidate and props for export
     renderResultMeta.revalidate =
-      'revalidate' in data ? data.revalidate : undefined
+      'revalidate' in data ? (data.revalidate as number | false) : undefined
     renderResultMeta.pageData = props
 
     // this must come after revalidate is added to renderResultMeta
@@ -1307,7 +1302,6 @@ export async function renderToHTML(
 
         return continueFromInitialStream(initialStream, {
           suffix,
-          dataStream: serverComponentsInlinedTransformStream?.readable,
           generateStaticHTML,
           getServerInsertedHTML,
           serverInsertedHTMLToHead: false,

@@ -28,16 +28,19 @@ import { getPathnameFromAbsolutePath } from './helpers/get-pathname-from-absolut
 import { proxyRequest } from './helpers/proxy-request'
 import { resolveHandlerError } from './helpers/resolve-handler-error'
 import { RouteKind } from '../../route-kind'
-import * as Log from '../../../../build/output/log'
 import { autoImplementMethods } from './helpers/auto-implement-methods'
 import { getNonStaticMethods } from './helpers/get-non-static-methods'
+import logger from '../helpers/logging'
 
 /**
  * AppRouteRouteHandlerContext is the context that is passed to the route
  * handler for app routes.
  */
 export interface AppRouteRouteHandlerContext extends RouteModuleHandleContext {
-  staticGenerationContext: StaticGenerationContext['renderOpts']
+  staticGenerationContext: Pick<
+    StaticGenerationContext['renderOpts'],
+    'supportsDynamicHTML' | 'incrementalCache' | 'store'
+  >
 }
 
 /**
@@ -45,7 +48,7 @@ export interface AppRouteRouteHandlerContext extends RouteModuleHandleContext {
  * second argument.
  */
 type AppRouteHandlerFnContext = {
-  params?: Record<string, string | string[]>
+  params?: Record<string, string | string[] | undefined>
 }
 
 /**
@@ -78,7 +81,7 @@ export type AppRouteHandlers = {
 export type AppRouteUserlandModule = AppRouteHandlers &
   Pick<AppConfig, 'dynamic' | 'revalidate' | 'dynamicParams' | 'fetchCache'> & {
     // TODO: (wyattjoh) create a type for this
-    generateStaticParams?: any
+    generateStaticParams?: unknown
   }
 
 /**
@@ -108,7 +111,7 @@ export class AppRouteRouteModule extends RouteModule<
   private readonly nonStaticMethods: ReadonlyArray<HTTP_METHOD> | false
   private readonly dynamic: AppRouteUserlandModule['dynamic']
 
-  constructor({
+  public constructor({
     userland,
     pathname,
     resolvedPagePath,
@@ -159,7 +162,7 @@ export class AppRouteRouteModule extends RouteModule<
    * Validates the userland module to ensure the exported methods and properties
    * are valid.
    */
-  public async setup() {
+  public setup(): void {
     // If we've already setup, then return.
     if (this.hasSetup) return
 
@@ -177,7 +180,7 @@ export class AppRouteRouteModule extends RouteModule<
       const lowercased = HTTP_METHODS.map((method) => method.toLowerCase())
       for (const method of lowercased) {
         if (method in this.userland) {
-          Log.error(
+          logger.error(
             `Detected lowercase method '${method}' in '${
               this.resolvedPagePath
             }'. Export the uppercase '${method.toUpperCase()}' method name to fix this error.`
@@ -188,7 +191,7 @@ export class AppRouteRouteModule extends RouteModule<
       // Print error if the module exports a default handler, they must use named
       // exports for each HTTP method.
       if ('default' in this.userland) {
-        Log.error(
+        logger.error(
           `Detected default export in '${this.resolvedPagePath}'. Export a named export for each HTTP method instead.`
         )
       }
@@ -196,7 +199,7 @@ export class AppRouteRouteModule extends RouteModule<
       // If there is no methods exported by this module, then return a not found
       // response.
       if (!HTTP_METHODS.some((method) => method in this.userland)) {
-        Log.error(
+        logger.error(
           `No HTTP methods exported in '${this.resolvedPagePath}'. Export a named export for each HTTP method.`
         )
       }
@@ -245,6 +248,7 @@ export class AppRouteRouteModule extends RouteModule<
 
     // Add the fetchCache option to the renderOpts.
     staticGenerationContext.renderOpts.fetchCache = this.userland.fetchCache
+    staticGenerationContext.renderOpts.nextExport = context.export
 
     // Run the handler with the request AsyncLocalStorage to inject the helper
     // support. We set this to `unknown` because the type is not known until

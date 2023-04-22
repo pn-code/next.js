@@ -2,7 +2,10 @@ import type { RemotePattern } from '../shared/lib/image-config'
 import type { AppBuildManifest } from './webpack/plugins/app-build-manifest-plugin'
 import type { PagesManifest } from './webpack/plugins/pages-manifest-plugin'
 import type { ExportPathMap, NextConfigComplete } from '../server/config-shared'
-import type { MiddlewareManifest } from './webpack/plugins/middleware-plugin'
+import type {
+  EdgeFunctionDefinition,
+  MiddlewareManifest,
+} from './webpack/plugins/middleware-plugin'
 import type { ActionManifest } from './webpack/plugins/flight-client-entry-plugin'
 import type { ExportOptions } from '../export'
 
@@ -291,19 +294,20 @@ export default async function build(
       if (isAppDirEnabled) {
         process.env.NEXT_PREBUNDLED_REACT = '1'
       }
-      await promises
-        .writeFile(
+
+      try {
+        await promises.writeFile(
           initialRequireHookFilePath,
           content.replace(
             /isPrebundled = (true|false)/,
             `isPrebundled = ${isAppDirEnabled}`
           )
         )
-        .catch((err) => {
-          if (isAppDirEnabled) {
-            throw err
-          }
-        })
+      } catch (err) {
+        if (isAppDirEnabled) {
+          throw err
+        }
+      }
 
       const { pagesDir, appDir } = findPagesDir(dir, isAppDirEnabled)
       NextBuildContext.pagesDir = pagesDir
@@ -1366,7 +1370,7 @@ export default async function build(
 
                 if (pageType === 'app' || !isReservedPage(page)) {
                   try {
-                    let edgeInfo: any
+                    let edgeInfo: EdgeFunctionDefinition
 
                     if (isEdgeRuntime(pageRuntime)) {
                       if (pageType === 'app') {
@@ -1578,8 +1582,10 @@ export default async function build(
                     if (
                       !isError(err) ||
                       err.message !== 'INVALID_DEFAULT_EXPORT'
-                    )
+                    ) {
                       throw err
+                    }
+
                     invalidPages.add(page)
                   }
                 }
@@ -2709,8 +2715,9 @@ export default async function build(
           }
 
           // remove temporary export folder
-          await recursiveDelete(exportOptions.outdir)
-          await promises.rmdir(exportOptions.outdir)
+          // FIXME: (wyattjoh) re-enabled once testing is complete
+          // await recursiveDelete(exportOptions.outdir)
+          // await promises.rmdir(exportOptions.outdir)
           await promises.writeFile(
             manifestPath,
             JSON.stringify(pagesManifest, null, 2),

@@ -973,13 +973,7 @@ export default class NextNodeServer extends BaseServer {
       )
     }
 
-    return renderToHTML(
-      req.originalRequest,
-      res.originalResponse,
-      pathname,
-      query,
-      renderOpts
-    )
+    throw new Error("Invariant: shouldn't be hit")
   }
 
   protected streamResponseChunk(res: NodeNextResponse, chunk: any) {
@@ -2524,13 +2518,8 @@ export default class NextNodeServer extends BaseServer {
     return routes
   }
 
-  private _cachedPreviewManifest: PrerenderManifest | undefined
   protected getPrerenderManifest(): PrerenderManifest {
-    if (this._cachedPreviewManifest) {
-      return this._cachedPreviewManifest
-    }
-    const manifest = require(join(this.distDir, PRERENDER_MANIFEST))
-    return (this._cachedPreviewManifest = manifest)
+    return require(join(this.distDir, PRERENDER_MANIFEST))
   }
 
   protected getRoutesManifest() {
