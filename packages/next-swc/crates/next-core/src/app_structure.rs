@@ -442,6 +442,11 @@ async fn directory_tree_to_entrypoints_internal(
 ) -> Result<EntrypointsVc> {
     let mut result = IndexMap::new();
 
+    // appDir ignores path starts with underscore
+    if directory_name.starts_with('_') {
+        return Ok(Entrypoints(result).cell());
+    }
+
     let directory_tree = &*directory_tree.await?;
 
     let subdirectories = &directory_tree.subdirectories;
@@ -534,6 +539,7 @@ async fn directory_tree_to_entrypoints_internal(
     for (subdir_name, &subdirectory) in subdirectories.iter() {
         let parallel_route_key = match_parallel_route(subdir_name);
         let optional_segment = is_optional_segment(subdir_name);
+
         let map = directory_tree_to_entrypoints_internal(
             app_dir,
             subdir_name,

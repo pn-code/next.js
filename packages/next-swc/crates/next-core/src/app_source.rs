@@ -464,14 +464,15 @@ async fn create_app_page_source_for_route(
     fallback_page: DevHtmlAssetVc,
     intermediate_output_path_root: FileSystemPathVc,
 ) -> Result<ContentSourceVc> {
-    let pathname_vc = StringVc::cell(pathname.to_string());
+    let pathname = pathname.to_string().replace("%5F", "_");
+    let pathname_vc = StringVc::cell(pathname.clone());
 
     let params_matcher = NextParamsMatcherVc::new(pathname_vc);
 
     let source = create_node_rendered_source(
         project_path,
         env,
-        pathname_to_specificity(pathname),
+        pathname_to_specificity(pathname.as_str()),
         server_root,
         params_matcher.into(),
         pathname_vc,
@@ -506,14 +507,15 @@ async fn create_app_route_source_for_route(
     runtime_entries: AssetsVc,
     intermediate_output_path_root: FileSystemPathVc,
 ) -> Result<ContentSourceVc> {
-    let pathname_vc = StringVc::cell(pathname.to_string());
+    let pathname = pathname.to_string().replace("%5F", "_");
+    let pathname_vc = StringVc::cell(pathname.clone());
 
     let params_matcher = NextParamsMatcherVc::new(pathname_vc);
 
     let source = create_node_api_source(
         project_path,
         env,
-        pathname_to_specificity(pathname),
+        pathname_to_specificity(pathname.as_str()),
         server_root,
         params_matcher.into(),
         pathname_vc,
