@@ -61,10 +61,12 @@ use turbo_tasks::{TryJoinIterExt, ValueToString};
 
 use crate::{
     app_render::next_layout_entry_transition::NextServerComponentTransition,
+    app_segment_config::parse_segment_config_from_source,
     app_structure::{
         get_entrypoints, Components, Entrypoint, LoaderTree, LoaderTreeVc, Metadata, OptionAppDirVc,
     },
-    embed_js::{next_js_file, next_js_file_path},
+    bootstrap::{route_bootstrap, BootstrapConfigVc},
+    embed_js::{next_asset, next_js_file, next_js_file_path},
     env::env_for_js,
     fallback::get_fallback_page,
     next_client::{
@@ -90,6 +92,7 @@ use crate::{
         get_server_compile_time_info, get_server_module_options_context,
         get_server_resolve_options_context, ServerContextType,
     },
+    util::NextRuntime,
 };
 
 #[turbo_tasks::function]
@@ -253,7 +256,7 @@ fn next_edge_route_transition(
         edge_resolve_options_context,
         output_path,
         base_path: app_dir,
-        bootstrap_file: next_js_file("entry/app/edge-route-bootstrap.ts"),
+        bootstrap_asset: next_asset("entry/app/edge-route-bootstrap.ts"),
         entry_name: "edge".to_string(),
     }
     .cell()
@@ -819,7 +822,6 @@ impl AppRouteVc {
     #[turbo_tasks::function]
     async fn entry(self) -> Result<NodeRenderingEntryVc> {
         let this = self.await?;
-        let internal_asset = SourceAssetVc::new(next_js_file_path("entry/app/edge-route.ts"));
 
         let chunking_context = DevChunkingContextVc::builder(
             this.project_path,
@@ -833,10 +835,49 @@ impl AppRouteVc {
         .reference_chunk_source_maps(false)
         .build();
 
-        let entry = this.context.with_transition("next-route").process(
-            SourceAssetVc::new(this.entry_path).into(),
+        let entry_source_asset = SourceAssetVc::new(this.entry_path);
+        let entry_asset = this.context.process(
+            entry_source_asset.into(),
             Value::new(ReferenceType::Entry(EntryReferenceSubType::AppRoute)),
         );
+
+        let config = parse_segment_config_from_source(entry_asset);
+        let module = match config.await?.runtime {
+            NextRuntime::NodeJs => {
+                let bootstrap_asset = next_asset("entry/app/route.ts");
+
+                route_bootstrap(
+                    entry_asset,
+                    this.context,
+                    this.project_path,
+                    bootstrap_asset,
+                    BootstrapConfigVc::empty(),
+                )
+            }
+            NextRuntime::Edge => {
+                let internal_asset = next_asset("entry/app/edge-route.ts");
+
+                let entry = this.context.with_transition("next-edge-route").process(
+                    entry_source_asset.into(),
+                    Value::new(ReferenceType::Entry(EntryReferenceSubType::AppRoute)),
+                );
+
+                EcmascriptModuleAssetVc::new_with_inner_assets(
+                    internal_asset.into(),
+                    this.context,
+                    Value::new(EcmascriptModuleAssetType::Typescript),
+                    EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
+                        use_define_for_class_fields: false,
+                    }]),
+                    Default::default(),
+                    this.context.compile_time_info(),
+                    InnerAssetsVc::cell(indexmap! {
+                        "ROUTE_CHUNK_GROUP".to_string() => entry
+                    }),
+                )
+            }
+        };
+
         Ok(NodeRenderingEntry {
             runtime_entries: EvaluatableAssetsVc::cell(
                 this.runtime_entries
@@ -845,19 +886,7 @@ impl AppRouteVc {
                     .map(|entry| EvaluatableAssetVc::from_asset(*entry, this.context))
                     .collect(),
             ),
-            module: EcmascriptModuleAssetVc::new_with_inner_assets(
-                internal_asset.into(),
-                this.context,
-                Value::new(EcmascriptModuleAssetType::Typescript),
-                EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-                    use_define_for_class_fields: false,
-                }]),
-                Default::default(),
-                this.context.compile_time_info(),
-                InnerAssetsVc::cell(indexmap! {
-                    "ROUTE_CHUNK_GROUP".to_string() => entry
-                }),
-            ),
+            module,
             chunking_context,
             intermediate_output_path: this.intermediate_output_path,
             output_root: this.output_root,
