@@ -1,25 +1,20 @@
 use anyhow::Result;
 use indexmap::indexmap;
-
 use turbo_binding::{
     turbo::tasks_fs::FileSystemPathVc,
     turbopack::{
-        core::{
-            asset::{AssetVc},
-            chunk::ChunkingContextVc,
-            compile_time_info::CompileTimeInfoVc,
-        },
+        core::{asset::AssetVc, chunk::ChunkingContextVc, compile_time_info::CompileTimeInfoVc},
         ecmascript::chunk_group_files_asset::ChunkGroupFilesAsset,
         turbopack::{
             module_options::ModuleOptionsContextVc,
-            ModuleAssetContextVc,
             resolve_options_context::ResolveOptionsContextVc,
             transition::{Transition, TransitionVc},
+            ModuleAssetContextVc,
         },
     },
 };
 
-use crate::bootstrap::{BootstrapConfigVc, route_bootstrap};
+use crate::bootstrap::{route_bootstrap, BootstrapConfigVc};
 
 #[turbo_tasks::value(shared)]
 pub struct NextEdgeTransition {

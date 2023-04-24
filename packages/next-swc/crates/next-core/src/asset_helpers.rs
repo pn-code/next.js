@@ -10,7 +10,10 @@ use turbo_binding::turbopack::{
 };
 use turbo_tasks::Value;
 
-pub(crate) fn as_es_module_asset(asset: AssetVc, context: AssetContextVc) -> EcmascriptModuleAssetVc {
+pub(crate) fn as_es_module_asset(
+    asset: AssetVc,
+    context: AssetContextVc,
+) -> EcmascriptModuleAssetVc {
     EcmascriptModuleAssetVc::new(
         asset,
         context,
